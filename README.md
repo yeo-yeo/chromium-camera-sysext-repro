@@ -6,7 +6,11 @@ It shows that a Chromium-based app can keep a stale camera list after a Camera S
 
 ## Repro Video
 
-[Watch the repro video](./repro-video.mp4)
+
+
+https://github.com/user-attachments/assets/4dabcafc-4793-4d80-aaa7-a40e22a06bdd
+
+
 
 ## Quick Start
 
