@@ -1,0 +1,70 @@
+name: ChromiumFeedback
+
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    macOS: "13.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: QZ7DHHLN25
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_APP_SANDBOX: YES
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CHROMIUM_REPRO_APP_GROUP: group.$(DEVELOPMENT_TEAM).com.example.ChromiumFeedback
+    GENERATE_INFOPLIST_FILE: YES
+
+targets:
+  ChromiumFeedback:
+    type: application
+    platform: macOS
+    sources:
+      - path: ChromiumFeedback
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ChromiumFeedback
+        PRODUCT_NAME: ChromiumFeedback
+        INFOPLIST_FILE: ChromiumFeedback/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ChromiumFeedback/ChromiumFeedback.entitlements
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_LSMinimumSystemVersion: "13.0"
+        INFOPLIST_KEY_NSCameraUsageDescription: "ChromiumFeedback only needs camera access for the embedded Camera Extension repro."
+        INFOPLIST_KEY_NSSystemExtensionUsageDescription: "ChromiumFeedback installs a Camera Extension to reproduce Chromium camera-list staleness."
+    dependencies:
+      - target: Extension
+        embed: true
+        codeSign: true
+
+  Extension:
+    type: system-extension
+    platform: macOS
+    sources:
+      - path: Extension
+        excludes: [Info.plist]
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ChromiumFeedback.Extension
+        PRODUCT_NAME: com.example.ChromiumFeedback.Extension
+        INFOPLIST_FILE: Extension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Extension/Extension.entitlements
+        SKIP_INSTALL: YES
+        ENABLE_RESOURCE_ACCESS_CAMERA: YES
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+          - "@executable_path/../../../../Frameworks"
+        INFOPLIST_KEY_CFBundleDisplayName: "ChromiumFeedback Camera Extension"
+        INFOPLIST_KEY_NSCameraUsageDescription: "ChromiumFeedback Camera Extension"
+        INFOPLIST_KEY_NSSystemExtensionUsageDescription: "ChromiumFeedback Camera Extension"
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""

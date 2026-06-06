@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chromium Camera Enumeration Repro</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 32px;
+        max-width: 980px;
+        line-height: 1.45;
+      }
+
+      button {
+        margin-right: 8px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+        background: ButtonFace;
+        color: ButtonText;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: default;
+        opacity: 0.6;
+      }
+
+      code,
+      pre {
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          monospace;
+      }
+
+      .summary {
+        margin: 20px 0;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: color-mix(in srgb, currentColor 8%, transparent);
+      }
+
+      .present {
+        color: #15803d;
+        font-weight: 700;
+      }
+
+      .missing {
+        color: #b91c1c;
+        font-weight: 700;
+      }
+
+      .snapshot {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+        border-radius: 10px;
+      }
+
+      .snapshot h2 {
+        margin: 0 0 8px;
+        font-size: 14px;
+      }
+
+      .device {
+        margin: 6px 0;
+        padding-left: 12px;
+        border-left: 3px solid color-mix(in srgb, currentColor 18%, transparent);
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .controls button {
+        margin-right: 0;
+      }
+
+      video {
+        display: block;
+        width: 320px;
+        max-width: 100%;
+        margin: 16px 0;
+        border-radius: 10px;
+        background: black;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chromium Camera Enumeration Repro</h1>
+    <p>
+      Keep this page open while uninstalling and reinstalling the
+      <code>ChromiumFeedback</code> Camera Extension. Click
+      <strong>Enumerate devices</strong> after each step. A stale Chromium
+      process may keep missing <code>Chromium Repro Camera</code> even though a
+      fresh AVFoundation process sees it.
+    </p>
+
+    <div class="controls">
+      <button id="permissionButton">Request camera permission</button>
+      <button id="stopButton" disabled>Stop camera</button>
+      <button id="enumerateButton">Enumerate devices</button>
+      <button id="clearButton">Clear history</button>
+      <label>
+        <input id="keepAliveInput" type="checkbox" checked />
+        keep selected camera stream alive
+      </label>
+    </div>
+
+    <div class="summary" id="summary">No snapshots yet.</div>
+    <video id="preview" autoplay muted playsinline></video>
+    <div id="history"></div>
+
+    <script>
+      const targetName = "Chromium Repro Camera";
+      const summary = document.getElementById("summary");
+      const history = document.getElementById("history");
+      const permissionButton = document.getElementById("permissionButton");
+      const stopButton = document.getElementById("stopButton");
+      const enumerateButton = document.getElementById("enumerateButton");
+      const clearButton = document.getElementById("clearButton");
+      const keepAliveInput = document.getElementById("keepAliveInput");
+      const preview = document.getElementById("preview");
+      let snapshotCount = 0;
+      let activeStream = null;
+
+      function timestamp() {
+        return new Date().toLocaleTimeString(undefined, {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          fractionalSecondDigits: 3,
+        });
+      }
+
+      async function requestPermission() {
+        permissionButton.disabled = true;
+        try {
+          stopActiveStream();
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+          const [track] = stream.getVideoTracks();
+          const settings = track?.getSettings?.() ?? {};
+          summary.innerHTML = `
+            getUserMedia() succeeded:
+            <strong>${track?.label || "(no track label)"}</strong>
+            <br />
+            <code>${escapeHtml(JSON.stringify(settings))}</code>
+          `;
+
+          if (keepAliveInput.checked) {
+            activeStream = stream;
+            preview.srcObject = stream;
+            stopButton.disabled = false;
+          } else {
+            stream.getTracks().forEach((track) => track.stop());
+          }
+        } catch (error) {
+          summary.innerHTML = `
+            getUserMedia() failed:
+            <span class="missing">${error.name}: ${escapeHtml(error.message)}</span>
+          `;
+        } finally {
+          permissionButton.disabled = false;
+        }
+      }
+
+      async function enumerateDevices() {
+        enumerateButton.disabled = true;
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter((device) => device.kind === "videoinput");
+          const target = videoInputs.find((device) => device.label.includes(targetName));
+          renderSnapshot(devices, videoInputs, target);
+        } catch (error) {
+          summary.textContent = `enumerateDevices() failed: ${error.name}: ${error.message}`;
+        } finally {
+          enumerateButton.disabled = false;
+        }
+      }
+
+      function renderSnapshot(devices, videoInputs, target) {
+        snapshotCount += 1;
+        const statusClass = target ? "present" : "missing";
+        const statusText = target ? "PRESENT" : "MISSING";
+
+        summary.innerHTML = `
+          Snapshot ${snapshotCount} at ${timestamp()}:
+          <span class="${statusClass}">${targetName} ${statusText}</span>
+          (${videoInputs.length} video input${videoInputs.length === 1 ? "" : "s"})
+        `;
+
+        const section = document.createElement("section");
+        section.className = "snapshot";
+
+        const header = document.createElement("h2");
+        header.textContent = `Snapshot ${snapshotCount} - ${timestamp()}`;
+        section.appendChild(header);
+
+        if (videoInputs.length === 0) {
+          const empty = document.createElement("p");
+          empty.textContent = "No video input devices returned.";
+          section.appendChild(empty);
+        }
+
+        const raw = document.createElement("pre");
+        raw.textContent = JSON.stringify(
+          devices.map((device) => ({
+            kind: device.kind,
+            label: device.label,
+            deviceId: device.deviceId,
+            groupId: device.groupId,
+          })),
+          null,
+          2,
+        );
+        section.appendChild(raw);
+
+        for (const device of devices) {
+          const row = document.createElement("div");
+          row.className = "device";
+          if (device.label.includes(targetName)) {
+            row.classList.add("present");
+          }
+          row.innerHTML = `
+            <div><strong>${device.label || "(label hidden until permission)"}</strong></div>
+            <div><code>kind=${device.kind}</code></div>
+            <div><code>deviceId=${device.deviceId || "(empty)"}</code></div>
+            <div><code>groupId=${device.groupId || "(empty)"}</code></div>
+          `;
+          section.appendChild(row);
+        }
+
+        history.prepend(section);
+      }
+
+      function stopActiveStream() {
+        if (!activeStream) {
+          return;
+        }
+        activeStream.getTracks().forEach((track) => track.stop());
+        activeStream = null;
+        preview.srcObject = null;
+        stopButton.disabled = true;
+      }
+
+      function escapeHtml(value) {
+        return value.replace(/[&<>"']/g, (char) => {
+          switch (char) {
+            case "&":
+              return "&amp;";
+            case "<":
+              return "&lt;";
+            case ">":
+              return "&gt;";
+            case '"':
+              return "&quot;";
+            case "'":
+              return "&#039;";
+            default:
+              return char;
+          }
+        });
+      }
+
+      permissionButton.addEventListener("click", requestPermission);
+      stopButton.addEventListener("click", stopActiveStream);
+      enumerateButton.addEventListener("click", enumerateDevices);
+      clearButton.addEventListener("click", () => {
+        snapshotCount = 0;
+        history.textContent = "";
+        summary.textContent = "No snapshots yet.";
+      });
+
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        summary.textContent = "navigator.mediaDevices.enumerateDevices is unavailable on this page.";
+        permissionButton.disabled = true;
+        enumerateButton.disabled = true;
+      }
+    </script>
+  </body>
+</html>
