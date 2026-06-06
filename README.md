@@ -4,6 +4,10 @@ This is a minimal macOS CoreMediaIO Camera Extension repro for Chromium bug repo
 
 It shows that a Chromium-based app can keep a stale camera list after a Camera System Extension is deactivated and reactivated while the Chromium app stays open. A fresh AVFoundation observer sees the camera, but Chrome's `navigator.mediaDevices.enumerateDevices()` does not recover until Chrome is restarted.
 
+## Repro Video
+
+[Watch the repro video](./repro-video.mp4)
+
 ## Quick Start
 
 From this directory:
